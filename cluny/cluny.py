@@ -73,20 +73,45 @@ def make_correlation_graph(mat):
     print(len(nx.edges(G)))
     show()
 
-def make_cross_correlation_graph(G, positions):
-    nx.draw(G, positions)
-    print(len(nx.edges(G)))
-    show()
 
-positions = {}
+class NetworkPlot:
+    def __init__(self):
+        self.positions = {}
+        for i in range(76):
+            if i < 64:
+                row = np.floor(i / 8)
+                col = i % 8
+            else:
+                x = i - 64
+                row = np.floor(x / 6) + 8
+                col = x % 6
+            self.positions[i] = (row, col)
 
+    def make_cross_correlation_graph(self, G):
+        nx.draw(G, self.positions)
+        print(len(nx.edges(G)))
+        show()
 
+    def make_betweenness_centrality(self, G):
+        bet = nx.betweenness_centrality(G)
+        nodesize=np.array([bet[v] for v in G])
+        nodesize = (nodesize*1000)+1
+        self.make_custom_plot(G, nodesize)
+
+    def make_degree_centrality(self, G):
+        bet = nx.degree_centrality(G)
+        nodesize=np.array([bet[v] for v in G])*1000
+        self.make_custom_plot(G, nodesize)
+
+    def make_custom_plot(self, G, nodesize):
+        nx.draw(G, self.positions, node_size=nodesize)
+        show()
+
+nx_plot = NetworkPlot()
 for mat in cluny_source.generate_source():
     ccm = cluny_preprocess.cross_correlation_matrix(mat)
     make_good_heatmap(ccm)
     ccam = cluny_preprocess.cross_correlation_adjacency_matrix(ccm)
     make_heatmap(ccam)
-    G = nx.Graph(ccam)
-    if not positions:
-        positions = nx.spring_layout(G)
-    make_cross_correlation_graph(G, positions)
+    G = nx.Graph(ccam)        
+    nx_plot.make_degree_centrality(G)
