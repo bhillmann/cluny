@@ -17,9 +17,10 @@ def make_correlation_adjacency_heatmap(data):
 def make_cross_correlation_adjacency_heatmap(data):
     make_heatmap(cluny_preprocess.cross_correlation_adjacency_matrix(data))
 
-def make_heatmap(data):
+def make_heatmap(data, name):
     pcolor(data)
     colorbar()
+    savefig(name+"_am.png", format="png")
     show()
 
 def make_dendrogram(ccm):
@@ -31,7 +32,7 @@ def make_dendrogram(ccm):
                )
     show()
 
-def make_good_heatmap(D):
+def make_good_heatmap(D, name):
     data_dist = 1. - D
     np.fill_diagonal(data_dist, 0.)
     data_dist = squareform(data_dist)
@@ -65,6 +66,7 @@ def make_good_heatmap(D):
     # Plot colorbar.
     axcolor = fig.add_axes([0.91,0.1,0.02,0.6])
     plt.colorbar(im, cax=axcolor)
+    savefig(name + "_hm.png", format="png")
     show()
 
 def make_correlation_graph(mat):
@@ -98,20 +100,22 @@ class NetworkPlot:
         nodesize = (nodesize*1000)+1
         self.make_custom_plot(G, nodesize)
 
-    def make_degree_centrality(self, G):
+    def make_degree_centrality(self, G, name):
         bet = nx.degree_centrality(G)
         nodesize=np.array([bet[v] for v in G])*1000
-        self.make_custom_plot(G, nodesize)
+        self.make_custom_plot(G, nodesize, name)
 
-    def make_custom_plot(self, G, nodesize):
+    def make_custom_plot(self, G, nodesize, name):
         nx.draw(G, self.positions, node_size=nodesize)
+        savefig(name + "_graph.png", format="png")
         show()
 
 nx_plot = NetworkPlot()
-for mat in cluny_source.generate_source():
+for mat, name in cluny_source.generate_source():
+    name = name.split('.')[0]
     ccm = cluny_preprocess.cross_correlation_matrix(mat)
-    make_good_heatmap(ccm)
+    make_good_heatmap(ccm, name)
     ccam = cluny_preprocess.cross_correlation_adjacency_matrix(ccm)
-    make_heatmap(ccam)
+    make_heatmap(ccam, name)
     G = nx.Graph(ccam)        
-    nx_plot.make_degree_centrality(G)
+    nx_plot.make_degree_centrality(G, name)

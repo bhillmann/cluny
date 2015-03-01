@@ -14,4 +14,4 @@ def generate_source():
         with open(file_path) as f:
             mat = np.loadtxt(f)
             print(file_names[i])
-            yield mat
+            yield mat, file_names[i]
