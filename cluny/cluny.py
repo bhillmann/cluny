@@ -2,8 +2,9 @@ import cluny_source
 import cluny_preprocess
 from pylab import *
 from scipy.spatial.distance import squareform 
-from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 import networkx as nx
+import pandas as pd
 
 def make_correlation_heatmap(data):
     make_heatmap(cluny_preprocess.correlation_matrix(data))
@@ -140,6 +141,14 @@ class NetworkPlot:
         savefig(name + "_graph.png", format="png")
         show()
 
+    def make_cluster_plot(self, G, name, colors):
+        nodesize = nx.degree_centrality(G)
+        nodesize = np.array([np.sqrt(nodesize[v])+.001 for v in G])*1000
+        nx.draw_networkx_nodes(G, self.positions, node_color=colors, node_size=nodesize)
+        nx.draw_networkx_edges(G, self.positions)
+        savefig(name + "_clusters.png", format="png")
+        show()
+
 class DifferenceNetworkPlot(NetworkPlot):
     def __init__(self):
         super().__init__()
@@ -226,25 +235,63 @@ def degree_plot(G1, G2, name):
     plt.savefig("degree_plot" + name + ".png")
     plt.show()
 
+def degree_distribution(G1, G2, name):
+    degrees1 = G1.degree() # dictionary node:degree
+    values1 = sorted(set(degrees1.values()))
+    hist1 = [list(degrees1.values()).count(x) for x in values1]
+    degrees2 = G2.degree() # dictionary node:degree
+    values2 = sorted(set(degrees2.values()))
+    hist2 = [list(degrees2.values()).count(x) for x in values2]
+    fig, ax = plt.subplots()
+    plt.plot(values1,hist1,'go-') # in-degree
+    plt.plot(values2,hist2,'rv-') # out-degree
+    plt.legend(['ictal-degree','preictal-degree'])
+    plt.xlabel('Degree')
+    plt.ylabel('Number of nodes')
+    plt.title('Degree Distribution')
+    ax.set_ylim(0, 12)
+    plt.savefig("degree_distribution_plot" + name + ".png")
+    plt.close()
 
+def return_color_list(ccm):
+    dist_ccm = 1. - ccm
+    np.fill_diagonal(dist_ccm, 0.)
+    dist_ccm = squareform(dist_ccm)
+    Y = linkage(dist_ccm, method='complete')
+    return fcluster(Y, .3)
 
-nx_plot = NetworkPlot()
-nx_diff_plot = DifferenceNetworkPlot()
-GM1 = nx.MultiGraph()
-GM2 = nx.MultiGraph()
-GM1.add_nodes_from([i for i in range(76)])
-GM2.add_nodes_from([i for i in range(76)])
-for i, (mat, name) in enumerate(cluny_source.generate_source()):
-    name = name.split('.')[0]
-    ccm = cluny_preprocess.cross_correlation_matrix(mat)
-    ccam = cluny_preprocess.cross_correlation_adjacency_matrix(ccm)
-    if i%2 == 0:
-        G1 = nx.Graph(ccam)
-        #GM1.add_edges_from(G1.edges())
-        #make_ps(nx_plot, G1, name, color='g')
-    else:
-        G2 = nx.Graph(ccam)
-        degree_plot(G1, G2, name)
+def dcg(relevances, rank=20):
+    relevances = np.asarray(relevances)[:rank]
+    n_relevances = len(relevances)
+    if n_relevances == 0:
+        return 0.
+    discounts = np.log2(np.arange(n_relevances) + 2)
+    return np.sum(relevances / discounts)
+
+def ndcg(relevances, rank=20):
+    best_dcg = dcg(sorted(relevances, reverse=True), rank)
+    if best_dcg == 0:
+        return 0.
+    return dcg(relevances, rank) / best_dcg
+
+#nx_plot = NetworkPlot()
+#nx_diff_plot = DifferenceNetworkPlot()
+#GM1 = nx.MultiGraph()
+#GM2 = nx.MultiGraph()
+#GM1.add_nodes_from([i for i in range(76)])
+#GM2.add_nodes_from([i for i in range(76)])
+#for i, (mat, name) in enumerate(cluny_source.generate_source()):
+#    name = name.split('.')[0]
+#    ccm = cluny_preprocess.cross_correlation_matrix(mat)
+#    Z1 = return_color_list(ccm)
+#    ccam = cluny_preprocess.cross_correlation_adjacency_matrix(ccm)
+#    if i%2 == 0:
+#        G1 = nx.Graph(ccam)
+#        #GM1.add_edges_from(G1.edges())
+#        #make_ps(nx_plot, G1, name, color='g')
+#    else:
+#        G2 = nx.Graph(ccam)
+        #degree_distribution(G1, G2, name)
         #GM2.add_edges_from(G2.edges())
         #make_ps(nx_plot, G2, name, color='r')
         #make_diff_ps(nx_diff_plot, G1, G2, name)
@@ -252,3 +299,24 @@ for i, (mat, name) in enumerate(cluny_source.generate_source()):
 #make_ps(nx_plot, GM1, 'all_g1', color='g')
 #make_ps(nx_plot, GM2, 'all_g2', color='r')
 #make_diff_ps(nx_diff_plot, GM1, GM2, 'all_diff')
+
+nx_plot = NetworkPlot()
+nx_diff_plot = DifferenceNetworkPlot()
+GM1 = nx.MultiGraph()
+GM2 = nx.MultiGraph()
+GM1.add_nodes_from([i for i in range(76)])
+GM2.add_nodes_from([i for i in range(76)])
+df = pd.DataFrame()
+col_max = pd.Series()
+for i, (mat, name) in enumerate(cluny_source.generate_source()):
+    name = name.split('.')[0]
+    ccm = cluny_preprocess.cross_correlation_matrix(mat)
+    colors = return_color_list(ccm)
+    col_max[name] = colors.max()
+    ccam = cluny_preprocess.cross_correlation_adjacency_matrix(ccm)
+    G = nx.Graph(ccam)
+    nx_plot.make_cluster_plot(G, name, colors)
+    df[name + "-deg"] = pd.Series(nx.degree_centrality(G))
+    df[name + "-bet"] = pd.Series(nx.betweenness_centrality(G))
+    df[name + "-close"] = pd.Series(nx.closeness_centrality(G))
+    df[name + "-cc"] = pd.Series(nx.clustering(G))
